@@ -7,7 +7,8 @@ import (
 
 var reNum = regexp.MustCompile(`[\d.]+`)
 
-func Extract(timestamp, s string) (fields []string, result string) {
+// ExtractTop extracts top output.
+func ExtractTop(timestamp, s string) (fields []string, result string) {
 	key := "load average:"
 	p := strings.Index(s, key)
 	s = s[p+len(key):]
