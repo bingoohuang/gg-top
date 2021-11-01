@@ -11,6 +11,8 @@ import (
 	"reflect"
 	"time"
 
+	"github.com/bingoohuang/gg/pkg/codec"
+
 	"github.com/bingoohuang/gg/pkg/ctl"
 	"github.com/bingoohuang/gg/pkg/fla9"
 	"github.com/bingoohuang/gg/pkg/sigx"
@@ -59,12 +61,12 @@ func collect(ctx context.Context, interval time.Duration, pids string) {
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
-	doCollect(pids)
+	doCollect(interval, pids)
 
 	for {
 		select {
 		case <-ticker.C:
-			doCollect(pids)
+			doCollect(interval, pids)
 		case <-ctx.Done():
 			return
 		}
@@ -73,17 +75,18 @@ func collect(ctx context.Context, interval time.Duration, pids string) {
 
 var lastFields []string
 
-func doCollect(pids string) {
+func doCollect(interval time.Duration, pids string) {
 	out, err := exec.Command("sh", "-c", "top -bn1 -p "+pids).Output()
 	if err != nil {
 		log.Printf("exec failed, error:%v", err)
 		return
 	}
 
-	fields, result := ExtractTop(time.Now().Format(`2006-01-02 15:04`), string(out))
+	t := time.Now().Truncate(interval)
+	fields, result := ExtractTop(t.Format(`2006-01-02T15:04:05`), string(out))
 
 	if !reflect.DeepEqual(lastFields, fields) {
-		fmt.Printf("// fields: %+v\n", fields)
+		fmt.Printf("// %s\n", codec.Json(fields))
 		lastFields = fields
 	}
 

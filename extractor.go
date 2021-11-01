@@ -2,7 +2,10 @@ package main
 
 import (
 	"regexp"
+	"sort"
 	"strings"
+
+	"github.com/bingoohuang/gg/pkg/ss"
 )
 
 var reNum = regexp.MustCompile(`[\d.]+`)
@@ -44,6 +47,9 @@ func ExtractTop(timestamp, s string) (fields []string, result string) {
 		headerMap[c] = i
 	}
 
+	var pids []int
+	pidLines := map[int][]string{}
+
 	for _, line := range strings.Split(s, "\n") {
 		line = strings.TrimSpace(line)
 		if line == "" {
@@ -51,6 +57,15 @@ func ExtractTop(timestamp, s string) (fields []string, result string) {
 		}
 
 		fs := strings.Fields(line)
+		pid := ss.ParseInt(fs[headerMap["PID"]])
+		pids = append(pids, pid)
+		pidLines[pid] = fs
+	}
+
+	sort.Ints(pids)
+
+	for _, pid := range pids {
+		fs := pidLines[pid]
 		fp := fs[headerMap["USER"]] + "-" + fs[headerMap["PID"]] + "-" + fs[headerMap["COMMAND"]] + "-"
 		for _, f := range fs {
 			result += "," + wrap(f)
