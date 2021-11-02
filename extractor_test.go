@@ -18,21 +18,51 @@ KiB Swap:  8257532 total,  8245244 free,    12288 used.  4357044 avail Mem
 28418 elastic+  20   0 4304336   1.0g 128396 S   0.0 13.1  21:51.44 java
 23134 kafka     20   0 5276184   1.1g  17672 S   0.0 14.0 101:24.10 java`
 
-	// elastic-java-28418:a kafka-23134-java:b
-	fields, result := ExtractTop("2021-11-01T12:48", s)
+	configs := []ExtractConfig{
+		{Start: "load average", End: "\n", Type: ExtractWhole, Names: []string{"load1", "load5", "load15"}},
+		{Start: "KiB Mem", End: "\n", Type: ExtractValueKey, Names: []string{"memTotal", "memFree", "memUsed", "memBuff"}},
+		{Start: "PID ", Type: ExtractTable, Excludes: []string{"PR", "NI", "S", "USER"}, SortBy: "PID"},
+	}
+
+	fields, result := ExtractTopWithConfig("2021-11-01T12:48", s, configs)
 	assert.Equal(t, []string{
 		"timestamp", "load1", "load5", "load15",
 		"memTotal", "memFree", "memUsed", "memBuff",
-		"elastic+-28418-java-PID", "elastic+-28418-java-USER", "elastic+-28418-java-PR", "elastic+-28418-java-NI",
-		"elastic+-28418-java-VIRT", "elastic+-28418-java-RES", "elastic+-28418-java-SHR", "elastic+-28418-java-S",
-		"elastic+-28418-java-%CPU", "elastic+-28418-java-%MEM", "elastic+-28418-java-TIME+", "elastic+-28418-java-COMMAND",
-		"kafka-23134-java-PID", "kafka-23134-java-USER", "kafka-23134-java-PR", "kafka-23134-java-NI",
-		"kafka-23134-java-VIRT", "kafka-23134-java-RES", "kafka-23134-java-SHR", "kafka-23134-java-S",
-		"kafka-23134-java-%CPU", "kafka-23134-java-%MEM", "kafka-23134-java-TIME+", "kafka-23134-java-COMMAND",
+		"23134-PID",
+		"23134-VIRT", "23134-RES", "23134-SHR",
+		"23134-%CPU", "23134-%MEM", "23134-TIME+", "23134-COMMAND",
+		"28418-PID",
+		"28418-VIRT", "28418-RES", "28418-SHR",
+		"28418-%CPU", "28418-%MEM", "28418-TIME+", "28418-COMMAND",
 	}, fields)
 	assert.Equal(t, "['2021-11-01T12:48',"+
 		"0.40, 0.22, 0.22,"+
 		"8009040,599628,3094756,4314656,"+
-		"28418,'elastic+',20,0,4304336,1.0,128396,'S',0.0,13.1,'21:51.44','java',"+
-		"23134,'kafka',20,0,5276184,1.1,17672,'S',0.0,14.0,'101:24.10','java']", result)
+		"23134,5276184,1.1,17672,0.0,14.0,'101:24.10','java',"+
+		"28418,4304336,1.0,128396,0.0,13.1,'21:51.44','java']",
+		result)
+
+	mac := `# top -l 1 -F -pid 99921 -pid 69330
+Processes: 600 total, 2 running, 598 sleeping, 3162 threads
+2021/11/02 14:34:29
+Load Avg: 2.61, 3.03, 3.25
+CPU usage: 4.64% user, 10.28% sys, 85.7% idle
+MemRegions: 249570 total, 4457M resident, 0B private, 2568M shared.
+PhysMem: 16G used (2669M wired), 136M unused.
+VM: 12T vsize, 0B framework vsize, 22281275(0) swapins, 23914209(0) swapouts.
+Networks: packets: 26981829/27G in, 22854927/25G out.
+Disks: 17344532/467G read, 11675489/375G written.
+
+PID    COMMAND          %CPU TIME     #TH #WQ #PORTS MEM  PURG  CMPRS PGRP  PPID  STATE    BOOSTS %CPU_ME %CPU_OTHRS UID FAULTS  COW  MSGSENT  MSGRECV  SYSBSD  SYSMACH   CSW     PAGEINS IDLEW  POWER INSTRS CYCLES USER       #MREGS RPRVT VPRVT VSIZE KPRVT KSHRD
+99921  Google Chrome He 0.0  00:54.07 15  1   144    110M 0B    99M   57371 57371 sleeping *0[5]  0.00000 0.00000    501 171850  2308 129683   61074    221189  429923    254106  860     3821   0.0   0      0      bingoobjca N/A    N/A   N/A   N/A   N/A   N/A
+69330  WeChat           0.0  15:51.88 37  9   49211  288M 7444K 137M  69330 69294 sleeping *5[15] 0.00000 0.00000    501 7275450 3595 72299264 32956646 8521736 117179313 9048963 7472    517256 0.0   0      0      bingoobjca N/A    N/A   N/A   N/A   N/A   N/A
+`
+
+	fields, result = ExtractTopWithConfig("2021-11-01T12:48", mac, []ExtractConfig{
+		{Start: "Load Avg:", End: "\n", Type: ExtractWhole, Names: []string{"load1", "load5", "load15"}},
+		{Start: "MemRegions", End: "\n", Type: ExtractValueKey},
+		{Start: "PID ", Type: ExtractTable, Includes: []string{"COMMAND", "MEM", "%CPU"}, SortBy: "PID"},
+	})
+	assert.Equal(t, []string{"timestamp", "load1", "load5", "load15", "total", "resident", "private", "shared", "69330-COMMAND", "69330-%CPU", "69330-MEM", "99921-COMMAND", "99921-%CPU", "99921-MEM"}, fields)
+	assert.Equal(t, "['2021-11-01T12:48',2.61, 3.03, 3.25,249570,4457,0,2568,'WeChat',0.0,288,'Google Chrome He',0.0,110]", result)
 }

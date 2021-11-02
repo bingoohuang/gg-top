@@ -4,79 +4,225 @@ import (
 	"regexp"
 	"sort"
 	"strings"
-
-	"github.com/bingoohuang/gg/pkg/ss"
+	"unicode"
 )
+
+// ExtractType defines how to extract info.
+type ExtractType int
+
+const (
+	// ExtractWhole extracts value as a whole
+	ExtractWhole ExtractType = iota
+	// ExtractValueKey extracts [value key] patterns.
+	ExtractValueKey
+	// ExtractTable extracts a text table info.
+	ExtractTable
+)
+
+// ExtractConfig defines configuration for config.
+type ExtractConfig struct {
+	Start    string
+	End      string
+	Type     ExtractType
+	Names    []string
+	Includes []string
+	Excludes []string
+	SortBy   string
+}
+
+func (c ExtractConfig) capture(s string) (string, bool) {
+	p := strings.Index(s, c.Start)
+	if p < 0 {
+		return "", false
+	}
+
+	var t string
+	// 表格，退回到换行处开始，表格为了计算左对齐右对齐，需要保留空格
+	if c.Type == ExtractTable {
+		if lastNewline := strings.LastIndex(s[:p], "\n"); lastNewline >= 0 {
+			t = s[lastNewline+1:]
+		} else {
+			t = s
+		}
+	} else {
+		t = s[p+len(c.Start):]
+	}
+
+	if c.End != "" {
+		q := strings.Index(t, c.End)
+		if q < 0 {
+			return "", false
+		}
+		t = t[:q]
+	}
+
+	if c.Type == ExtractTable {
+		return t, true
+	}
+
+	return strings.TrimFunc(t, func(r rune) bool {
+		return unicode.IsSpace(r) || r == ':' || r == ','
+	}), true
+}
 
 var reNum = regexp.MustCompile(`[\d.]+`)
 
+var reValueKey = regexp.MustCompile(`(\w+)\s+(\w+)`)
+
 // ExtractTop extracts top output.
 func ExtractTop(timestamp, s string) (fields []string, result string) {
-	key := "load average:"
-	p := strings.Index(s, key)
-	s = s[p+len(key):]
+	return ExtractTopWithConfig(timestamp, s, extractConfig)
+}
 
-	p = strings.Index(s, "\n")
-	loadAverage := strings.TrimSpace(s[:p])
-	s = s[p+1:]
+var linuxExtractConfig = []ExtractConfig{
+	{Start: "Load Avg:", End: "\n", Type: ExtractWhole, Names: []string{"load1", "load5", "load15"}},
+	{Start: "MemRegions", End: "\n", Type: ExtractValueKey},
+	{Start: "PID ", Type: ExtractTable, Includes: []string{"COMMAND", "MEM", "%CPU"}, SortBy: "PID"},
+}
 
-	result = "['" + timestamp + "'," + loadAverage
-	fields = []string{"timestamp", "load1", "load5", "load15"}
-	key = "KiB Mem"
-	p = strings.Index(s, key)
-	s = s[p+len(key):]
-	p = strings.Index(s, "\n")
-	mem := s[:p]
-	s = s[p+1:]
-	for _, rs := range strings.Fields(mem) {
-		if reNum.MatchString(rs) {
-			result += "," + rs
-		}
-	}
+var darwinExtractConfig = []ExtractConfig{
+	{Start: "Load Avg:", End: "\n", Type: ExtractWhole, Names: []string{"load1", "load5", "load15"}},
+	{Start: "MemRegions", End: "\n", Type: ExtractValueKey},
+	{Start: "PID ", Type: ExtractTable, Includes: []string{"COMMAND", "MEM", "%CPU"}, SortBy: "PID"},
+}
 
-	fields = append(fields, []string{"memTotal", "memFree", "memUsed", "memBuff"}...)
-	key = "PID"
-	p = strings.Index(s, key)
-	s = s[p:]
-	p = strings.Index(s, "\n")
-	header := strings.TrimSpace(s[:p])
-	s = s[p+1:]
-	headerColumns := strings.Fields(header)
-	headerMap := map[string]int{}
-	for i, c := range headerColumns {
-		headerMap[c] = i
-	}
+// ExtractTopWithConfig extracts top output.
+func ExtractTopWithConfig(timestamp, s string, configs []ExtractConfig) (fields []string, result string) {
+	fields = []string{"timestamp"}
+	result = "['" + timestamp + "'"
+	for _, c := range configs {
+		switch c.Type {
+		case ExtractWhole:
+			t, ok := c.capture(s)
+			if !ok {
+				continue
+			}
+			fields = append(fields, c.Names...)
+			result += "," + t
+		case ExtractValueKey:
+			t, ok := c.capture(s)
+			if !ok {
+				continue
+			}
 
-	var pids []int
-	pidLines := map[int][]string{}
+			for _, item := range reValueKey.FindAllStringSubmatch(t, -1) {
+				result += "," + wrap(item[1])
+				if len(c.Names) == 0 {
+					fields = append(fields, item[2])
+				}
+			}
 
-	for _, line := range strings.Split(s, "\n") {
-		line = strings.TrimSpace(line)
-		if line == "" {
-			continue
-		}
+			fields = append(fields, c.Names...)
+		case ExtractTable:
+			t, ok := c.capture(s)
+			if !ok {
+				continue
+			}
 
-		fs := strings.Fields(line)
-		pid := ss.ParseInt(fs[headerMap["PID"]])
-		pids = append(pids, pid)
-		pidLines[pid] = fs
-	}
-
-	sort.Ints(pids)
-
-	for _, pid := range pids {
-		fs := pidLines[pid]
-		fp := fs[headerMap["USER"]] + "-" + fs[headerMap["PID"]] + "-" + fs[headerMap["COMMAND"]] + "-"
-		for _, f := range fs {
-			result += "," + wrap(f)
-		}
-
-		for i := range headerColumns {
-			fields = append(fields, fp+headerColumns[i])
+			result, fields = c.extractTable(t, result, fields)
 		}
 	}
 
 	return fields, result + "]"
+}
+
+func (c ExtractConfig) extractTable(t, result string, fields []string) (string, []string) {
+	p := strings.Index(t, "\n")
+	header := t[:p]
+	t = t[p+1:]
+
+	sortBy := c.SortBy
+	headerColumns := strings.Fields(header)
+	fieldIndices := make([]int, len(headerColumns))
+
+	var left int
+	for i, col := range headerColumns {
+		j := strings.Index(header, col)
+		header = header[j+len(col):]
+		if i > 0 {
+			fieldIndices[i] = left + j
+		}
+		left += j + len(col)
+	}
+
+	headerMap := map[string]int{}
+	for i, col := range headerColumns {
+		headerMap[col] = i
+		if sortBy == "" {
+			sortBy = col
+		}
+	}
+
+	includes := make(map[string]bool)
+	for _, include := range c.Includes {
+		includes[include] = true
+	}
+	excludes := make(map[string]bool)
+	for _, exclude := range c.Excludes {
+		excludes[exclude] = true
+	}
+
+	var includeFunc func(col string) bool
+	if len(includes) > 0 {
+		includeFunc = func(col string) bool {
+			return includes[col]
+		}
+	} else if len(excludes) > 0 {
+		includeFunc = func(col string) bool {
+			return !excludes[col]
+		}
+	} else {
+		includeFunc = func(col string) bool {
+			return true
+		}
+	}
+
+	var sortValues []string
+	sortLines := map[string][]string{}
+
+	for _, line := range strings.Split(t, "\n") {
+		if strings.TrimSpace(line) == "" {
+			continue
+		}
+
+		fs := strings.Fields(line)
+		if len(fs) > len(headerColumns) {
+			fs = nil
+			for i := 0; i < len(headerColumns); i++ {
+				var v string
+				if i+1 < len(headerColumns) {
+					v = line[fieldIndices[i]:fieldIndices[i+1]]
+				} else {
+					v = line[fieldIndices[i]:]
+				}
+
+				fs = append(fs, strings.TrimSpace(v))
+			}
+		}
+
+		sortField := fs[headerMap[sortBy]]
+		sortValues = append(sortValues, sortField)
+		sortLines[sortField] = fs
+	}
+
+	sort.Strings(sortValues)
+
+	for _, sortValue := range sortValues {
+		fs := sortLines[sortValue]
+		fp := fs[headerMap[sortBy]] + "-"
+		for i, f := range fs {
+			if includeFunc(headerColumns[i]) {
+				result += "," + wrap(f)
+			}
+		}
+
+		for i, f := range headerColumns {
+			if includeFunc(f) {
+				fields = append(fields, fp+headerColumns[i])
+			}
+		}
+	}
+	return result, fields
 }
 
 func wrap(s string) string {
