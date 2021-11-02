@@ -5,10 +5,13 @@ import (
 	"embed"
 	"fmt"
 	"io/fs"
+	"io/ioutil"
 	"log"
 	"net/http"
+	"os"
 	"os/exec"
 	"reflect"
+	"strconv"
 	"time"
 
 	"github.com/bingoohuang/gg/pkg/codec"
@@ -58,7 +61,7 @@ func main() {
 }
 
 func collect(ctx context.Context, interval time.Duration, pids string) {
-	if interval == 0 || pids == "" {
+	if interval == 0 {
 		return
 	}
 
@@ -77,21 +80,36 @@ func collect(ctx context.Context, interval time.Duration, pids string) {
 	}
 }
 
-var lastFields []string
+var (
+	lastFields []string
+	file       *os.File
+)
 
 func doCollect(interval time.Duration, pids string) {
+	if pids == "" {
+		pids = strconv.Itoa(os.Getpid())
+	}
 	out, err := exec.Command("sh", "-c", "top -bn1 -p "+pids).Output()
 	if err != nil {
 		log.Printf("exec failed, error:%v", err)
 		return
 	}
 
-	t := time.Now().Truncate(interval)
-	fields, result := ExtractTop(t.Format(`2006-01-02T15:04:05`), string(out))
+	t := time.Now().Truncate(interval).Format(`2006-01-02T15:04:05`)
+	fields, result := ExtractTop(t, string(out))
 
 	if !reflect.DeepEqual(lastFields, fields) {
 		fmt.Printf("// %s\n", codec.Json(fields))
 		lastFields = fields
+		if file != nil {
+			file.Close()
+		}
+		file, _ = os.Open("gg-top" + t + ".data")
+		ioutil.WriteFile("gg-top"+t+".json", codec.Json(result), os.ModePerm)
+	}
+
+	if file != nil {
+		file.WriteString(result + "\n")
 	}
 
 	fmt.Printf("%s\n", result)
