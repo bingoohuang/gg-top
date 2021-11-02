@@ -58,6 +58,10 @@ func main() {
 }
 
 func collect(ctx context.Context, interval time.Duration, pids string) {
+	if interval == 0 || pids == "" {
+		return
+	}
+
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
