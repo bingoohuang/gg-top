@@ -136,8 +136,11 @@ func main() {
 			pids = func() []string { return pidWords }
 		} else {
 			grepWord := ""
+			thisPid := strconv.Itoa(os.Getpid())
 			for _, word := range pidWords {
-				grepWord += `|grep '\b` + word + `\b'`
+				if thisPid != word {
+					grepWord += `|grep '\b` + word + `\b'`
+				}
 			}
 			s := `ps -ef|grep -v grep` + grepWord + `|awk '{print $2}'|xargs|sed 's/ /,/g'`
 			pids = func() []string { return collectPids(s) }
