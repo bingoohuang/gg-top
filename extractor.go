@@ -75,9 +75,9 @@ func ExtractTop(timestamp, s string) (fields []string, result string) {
 }
 
 var linuxExtractConfig = []ExtractConfig{
-	{Start: "Load Avg:", End: "\n", Type: ExtractWhole, Names: []string{"load1", "load5", "load15"}},
-	{Start: "MemRegions", End: "\n", Type: ExtractValueKey},
-	{Start: "PID ", Type: ExtractTable, Includes: []string{"COMMAND", "MEM", "%CPU"}, SortBy: "PID"},
+	{Start: "load average:", End: "\n", Type: ExtractWhole, Names: []string{"load1", "load5", "load15"}},
+	{Start: "Mem:", End: "\n", Type: ExtractValueKey},
+	{Start: "PID ", Type: ExtractTable, Includes: []string{"VIRT", "RES", "SHR", "%CPU", "%MEM", "COMMAND"}, SortBy: "PID"},
 }
 
 var darwinExtractConfig = []ExtractConfig{
