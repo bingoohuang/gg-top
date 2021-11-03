@@ -10,6 +10,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"go.uber.org/multierr"
 )
 
 func tgzCreate(fsys fs.FS, name string, dataFilter dateFilter) error {
@@ -95,13 +97,7 @@ func tgz(fsys fs.FS, buf io.Writer, dataFilter dateFilter) error {
 		return fmt.Errorf("error: file type not supported")
 	}
 
-	if err := tw.Close(); err != nil {
-		return err
-	}
-	if err := zr.Close(); err != nil {
-		return err
-	}
-	return nil
+	return multierr.Append(tw.Close(), zr.Close())
 }
 
 func copyFile(fsys fs.FS, file string, dataFilter dateFilter, tw *tar.Writer, header *tar.Header) (n int64, err error) {

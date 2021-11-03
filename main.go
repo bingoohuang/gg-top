@@ -135,15 +135,13 @@ func main() {
 		} else if isAllNum(pidWords) {
 			pids = func() []string { return pidWords }
 		} else {
-			grepWord := ""
 			thisPid := strconv.Itoa(os.Getpid())
+			grepWord := ""
 			for _, word := range pidWords {
-				if thisPid != word {
-					grepWord += `|grep '\b` + word + `\b'`
-				}
+				grepWord += `|grep '\b` + word + `\b'`
 			}
 			s := `ps -ef|grep -v grep` + grepWord + `|awk '{print $2}'|xargs|sed 's/ /,/g'`
-			pids = func() []string { return collectPids(s) }
+			pids = func() []string { return collectPids(s, thisPid) }
 		}
 		go collectLoop(ctx, *pInterval, pids)
 	}
@@ -176,7 +174,7 @@ func main() {
 	}
 }
 
-func collectPids(s string) []string {
+func collectPids(s, excludePid string) []string {
 	log.Printf(`start to exec shell "%s"`, s)
 	out, err := exec.Command("sh", "-c", s).Output()
 	if err != nil {
@@ -184,7 +182,15 @@ func collectPids(s string) []string {
 		return nil
 	}
 
-	return ss.Split(string(out), ss.WithSeps(","))
+	pids := ss.Split(string(out), ss.WithSeps(","))
+	result := make([]string, 0, len(pids))
+	for _, pid := range pids {
+		if pid != excludePid {
+			result = append(result, pid)
+		}
+	}
+
+	return result
 }
 
 func ggHandle(h http.Handler) http.Handler {
