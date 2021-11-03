@@ -213,9 +213,9 @@ func handleIndex(w http.ResponseWriter, r *http.Request) {
 
 	var refreshMeta []byte
 	if *pInterval > 0 {
-		refreshMeta = []byte(fmt.Sprintf(`<meta http-equiv="refresh" content="%d" >`, *pInterval/time.Second))
+		refreshMeta = []byte(fmt.Sprintf(`<meta http-equiv="refresh" content="%d">`, *pInterval/time.Second))
 	}
-	data = bytes.Replace(data, []byte(`<meta http-equiv="refresh" content="600" >`), refreshMeta, 1)
+	data = bytes.Replace(data, []byte(`<meta http-equiv="refresh" content="600">`), refreshMeta, 1)
 
 	var header []byte
 	if pFileExists {
