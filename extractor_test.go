@@ -66,3 +66,8 @@ PID    COMMAND          %CPU TIME     #TH #WQ #PORTS MEM  PURG  CMPRS PGRP  PPID
 	assert.Equal(t, []string{"timestamp", "load1", "load5", "load15", "total", "resident", "private", "shared", "69330-COMMAND", "69330-%CPU", "69330-MEM", "99921-COMMAND", "99921-%CPU", "99921-MEM"}, fields)
 	assert.Equal(t, "[\"2021-11-01T12:48\",2.61, 3.03, 3.25,249570,4457,0,2568,\"WeChat\",0.0,288,\"Google Chrome He\",0.0,110]", result)
 }
+
+func TestWrap(t *testing.T) {
+	assert.Equal(t, "1048576", wrap("1.0g"))
+	assert.Equal(t, "1153433.6", wrap("1.1g"))
+}

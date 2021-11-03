@@ -5,6 +5,8 @@ import (
 	"sort"
 	"strings"
 	"unicode"
+
+	"github.com/bingoohuang/gg/pkg/ss"
 )
 
 // ExtractType defines how to extract info.
@@ -65,9 +67,11 @@ func (c ExtractConfig) capture(s string) (string, bool) {
 	}), true
 }
 
-var reNum = regexp.MustCompile(`\b[\d.]+`)
-
-var reValueKey = regexp.MustCompile(`(\w+)\s+(\w+)`)
+var (
+	reNum      = regexp.MustCompile(`\b[\d.]+`)
+	reSizeNum  = regexp.MustCompile(`(?i)^([\d.]+)([mg]?)$`)
+	reValueKey = regexp.MustCompile(`(\w+)\s+(\w+)`)
+)
 
 // ExtractTop extracts top output.
 func ExtractTop(timestamp, s string) (fields []string, result string) {
@@ -243,6 +247,22 @@ func createHeaderIndices(headerColumns []string, header string) headerIndices {
 }
 
 func wrap(s string) string {
+	subs := reSizeNum.FindAllStringSubmatch(s, -1)
+	if len(subs) > 0 {
+		numPart := subs[0][1]
+		unitPart := subs[0][2]
+		if unitPart == "" {
+			return numPart
+		}
+
+		switch strings.ToLower(unitPart) {
+		case "g":
+			return ss.FormatFloat(ss.ParseFloat64(numPart) * 1024 * 1024)
+		case "m":
+			return ss.FormatFloat(ss.ParseFloat64(numPart) * 1024)
+		}
+	}
+
 	if p := strings.Index(s, ":"); p >= 0 {
 		return `"` + s + `"` // ignore time like 21:51.44
 	}
