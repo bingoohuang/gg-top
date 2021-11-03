@@ -6,6 +6,7 @@ import (
 	"embed"
 	"errors"
 	"fmt"
+	"github.com/bingoohuang/gg/pkg/netx/freeport"
 	"io/fs"
 	"io/ioutil"
 	"log"
@@ -46,6 +47,7 @@ var (
 	pFile     = fla9.String("file", "", "data file, with :generate to create a zip html file and exit")
 	pVersion  = fla9.Bool("version", false, "show version and exit")
 	pPids     = fla9.String("pids", "", "pids, like 10,12")
+	pPort     = fla9.Int("port", 1100, "port")
 
 	pFileExists   bool
 	pFileGenerate bool
@@ -118,20 +120,28 @@ func main() {
 	handler := http.FileServer(http.FS(serverRoot))
 
 	mux := http.NewServeMux()
-	srv := &http.Server{Addr: ":8080", Handler: mux}
+	var srv *http.Server
 
-	go func() {
-		mux.Handle("/", ggHandle(handler))
-		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			log.Printf("listen error: %v", err)
-		}
-	}()
+	if *pPort > 0 {
+		addr := fmt.Sprintf(":%d", freeport.PortStart(*pPort))
+		srv = &http.Server{Addr: addr, Handler: mux}
+		log.Printf("Start to listen on %s", addr)
+
+		go func() {
+			mux.Handle("/", ggHandle(handler))
+			if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+				log.Printf("listen error: %v", err)
+			}
+		}()
+	}
 
 	<-ctx.Done()
 	log.Printf("exiting...")
 
-	if err := srv.Shutdown(context.TODO()); err != nil {
-		log.Printf("shutdown error: %v", err)
+	if srv != nil {
+		if err := srv.Shutdown(context.TODO()); err != nil {
+			log.Printf("shutdown error: %v", err)
+		}
 	}
 }
 
