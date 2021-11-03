@@ -326,14 +326,14 @@ func readDataFile(filename string) ([]byte, error) {
 		return nil, err
 	}
 
-	p := bytes.IndexRune(data, '\n')
+	p1 := bytes.Index(data, []byte(`{"headers":`))
+	p2 := bytes.Index(data, []byte(`,"data":[`))
 
 	var b bytes.Buffer
 	b.WriteString(`const headers = `)
-	b.Write(data[:p])
+	b.Write(data[p1+11 : p2])
 	b.WriteString("\nconst data = [")
-	b.Write(data[p : len(data)-2])
-	b.WriteString("]\n")
+	b.Write(data[p2+9 : len(data)-1])
 
 	return b.Bytes(), nil
 }
@@ -358,15 +358,28 @@ func collect(interval time.Duration, pidsFn func() []string) {
 	fields, result := ExtractTop(t, string(out))
 
 	defer handy.LockUnlock(&fileLock)()
-
+	var data bytes.Buffer
+	backOffset := int64(0)
 	if !reflect.DeepEqual(lastFields, fields) {
 		log.Printf("%s\n", codec.Json(fields))
 		lastFields = fields
 		tt := ss.Strip(t, func(r rune) bool { return !unicode.IsDigit(r) })
 		file = "gg-top-" + tt + ".json"
-		_, _ = filex.Append(file, append(codec.Json(fields), '\n'))
+		data.Write([]byte(`{"headers":`))
+		data.Write(codec.Json(fields))
+		data.Write([]byte(",\"data\":[\n"))
+		_, _ = filex.Append(file, data.Bytes())
+	} else {
+		backOffset = -2
 	}
 
-	_, _ = filex.Append(file, []byte(result+",\n"))
+	data.Reset()
+	if backOffset < 0 {
+		data.Write([]byte(",\n"))
+	}
+	data.Write([]byte(result))
+	data.Write([]byte("]}"))
+
+	_, _ = filex.Append(file, data.Bytes(), filex.WithBackOffset(backOffset))
 	log.Printf("%s\n", result)
 }

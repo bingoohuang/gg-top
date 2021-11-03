@@ -3,7 +3,7 @@ module github.com/bingoohuang/gg-top
 go 1.17
 
 require (
-	github.com/bingoohuang/gg v0.0.0-20211103090311-5fb46ca8d441
+	github.com/bingoohuang/gg v0.0.0-20211103152136-6c794cbb089e
 	github.com/stretchr/testify v1.7.0
 	go.uber.org/multierr v1.6.0
 )
