@@ -3,7 +3,7 @@ module github.com/bingoohuang/gg-top
 go 1.17
 
 require (
-	github.com/bingoohuang/gg v0.0.0-20211101144217-e59a827d579d
+	github.com/bingoohuang/gg v0.0.0-20211103040332-99e5f80dcc66
 	github.com/stretchr/testify v1.7.0
 )
 

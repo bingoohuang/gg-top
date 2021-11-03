@@ -65,7 +65,7 @@ func (c ExtractConfig) capture(s string) (string, bool) {
 	}), true
 }
 
-var reNum = regexp.MustCompile(`[\d.]+`)
+var reNum = regexp.MustCompile(`\b[\d.]+`)
 
 var reValueKey = regexp.MustCompile(`(\w+)\s+(\w+)`)
 
@@ -89,7 +89,7 @@ var darwinExtractConfig = []ExtractConfig{
 // ExtractTopWithConfig extracts top output.
 func ExtractTopWithConfig(timestamp, s string, configs []ExtractConfig) (fields []string, result string) {
 	fields = []string{"timestamp"}
-	result = "['" + timestamp + "'"
+	result = `["` + timestamp + `"`
 	for _, c := range configs {
 		switch c.Type {
 		case ExtractWhole:
@@ -131,51 +131,20 @@ func (c ExtractConfig) extractTable(t, result string, fields []string) (string, 
 	header := t[:p]
 	t = t[p+1:]
 
-	sortBy := c.SortBy
 	headerColumns := strings.Fields(header)
-	fieldIndices := make([]int, len(headerColumns))
-
-	var left int
-	for i, col := range headerColumns {
-		j := strings.Index(header, col)
-		header = header[j+len(col):]
-		if i > 0 {
-			fieldIndices[i] = left + j
-		}
-		left += j + len(col)
+	sortBy := c.SortBy
+	if sortBy == "" { // 取第一个
+		sortBy = headerColumns[0]
 	}
+
+	fieldIndices := createHeaderIndices(headerColumns, header)
 
 	headerMap := map[string]int{}
 	for i, col := range headerColumns {
 		headerMap[col] = i
-		if sortBy == "" {
-			sortBy = col
-		}
 	}
 
-	includes := make(map[string]bool)
-	for _, include := range c.Includes {
-		includes[include] = true
-	}
-	excludes := make(map[string]bool)
-	for _, exclude := range c.Excludes {
-		excludes[exclude] = true
-	}
-
-	var includeFunc func(col string) bool
-	if len(includes) > 0 {
-		includeFunc = func(col string) bool {
-			return includes[col]
-		}
-	} else if len(excludes) > 0 {
-		includeFunc = func(col string) bool {
-			return !excludes[col]
-		}
-	} else {
-		includeFunc = func(col string) bool {
-			return true
-		}
-	}
+	includeFunc := c.createIncludeFunc()
 
 	var sortValues []string
 	sortLines := map[string][]string{}
@@ -187,16 +156,9 @@ func (c ExtractConfig) extractTable(t, result string, fields []string) (string, 
 
 		fs := strings.Fields(line)
 		if len(fs) > len(headerColumns) {
-			fs = nil
+			fs = nil // 重新切割
 			for i := 0; i < len(headerColumns); i++ {
-				var v string
-				if i+1 < len(headerColumns) {
-					v = line[fieldIndices[i]:fieldIndices[i+1]]
-				} else {
-					v = line[fieldIndices[i]:]
-				}
-
-				fs = append(fs, strings.TrimSpace(v))
+				fs = append(fs, fieldIndices.cutField(line, i))
 			}
 		}
 
@@ -225,14 +187,69 @@ func (c ExtractConfig) extractTable(t, result string, fields []string) (string, 
 	return result, fields
 }
 
+func (c ExtractConfig) createIncludeFunc() func(col string) bool {
+	includes := make(map[string]bool)
+	for _, include := range c.Includes {
+		includes[include] = true
+	}
+	excludes := make(map[string]bool)
+	for _, exclude := range c.Excludes {
+		excludes[exclude] = true
+	}
+
+	if len(includes) > 0 {
+		return func(col string) bool {
+			return includes[col]
+		}
+	} else if len(excludes) > 0 {
+		return func(col string) bool {
+			return !excludes[col]
+		}
+	}
+
+	return func(col string) bool { return true }
+}
+
+type headerIndices struct {
+	Indices []int
+}
+
+func (h headerIndices) cutField(line string, i int) string {
+	var s string
+	if i+1 < len(h.Indices) {
+		s = line[h.Indices[i]:h.Indices[i+1]]
+	} else {
+		s = line[h.Indices[i]:]
+	}
+
+	return strings.TrimSpace(s)
+}
+
+func createHeaderIndices(headerColumns []string, header string) headerIndices {
+	fieldIndices := make([]int, len(headerColumns))
+
+	var left int
+	for i, col := range headerColumns {
+		j := strings.Index(header, col)
+		header = header[j+len(col):]
+		if i > 0 {
+			fieldIndices[i] = left + j
+		}
+		left += j + len(col)
+	}
+	return headerIndices{
+		Indices: fieldIndices,
+	}
+}
+
 func wrap(s string) string {
 	if p := strings.Index(s, ":"); p >= 0 {
-		return `'` + s + `'` // ignore time like 21:51.44
+		return `"` + s + `"` // ignore time like 21:51.44
 	}
 
 	if v := reNum.FindString(s); v != "" {
 		return v
 	}
 
-	return `'` + s + `'`
+	return `"` + s + `"`
 }

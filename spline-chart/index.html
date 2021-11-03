@@ -32,61 +32,7 @@
 <script src="js/anychart-base.min.js"></script>
 <script src="js/anychart-ui.min.js"></script>
 <script src="js/anychart-exports.min.js"></script>
-<script type="text/javascript">
-    function spline(chart, d, valueIndex, name) {
-        var s = chart.spline(d.mapAs({x: 0, value: valueIndex}))
-        s.name(name)
-        s.markers().zIndex(100)
-        s.hovered().markers().enabled(true).type('circle').size(4)
-    }
-
-    function splineChart(title, xTitle, yTitle) {
-        var c = anychart.line()
-        c.yAxis().labels().format('{%Value}')
-        c.animation(true)
-        c.crosshair().enabled(true).yLabel({enabled: false}).yStroke(null).xStroke('#cecece').zIndex(99)
-        c.yAxis().title(yTitle).labels({padding: [5, 5, 0, 5]})
-        c.xAxis().title(xTitle)
-        c.title(title)
-        return c
-    }
-
-    function spliceDraw(c, divId) {
-        c.legend().enabled(true).fontSize(13).padding([0, 0, 20, 0])
-        c.container(divId)
-        c.draw()
-    }
-
-    function findColumnIndex(columns, column) {
-        for (var i = 0; i < columns.length; i++) {
-            if (columns[i] === column) {
-                return i
-            }
-        }
-
-        return -1
-    }
-
-    anychart.onDocumentReady(function () {
-        var data = [
-            ['2021-11-01T23:55:00', 0.18, 0.17, 0.18, 47, 49, 213],
-            ['2021-11-02T00:00:00', 0.04, 0.10, 0.14, 57, 50, 300],
-            ['2021-11-02T00:05:00', 0.24, 0.14, 0.13, 67, 51, 400],
-        ]
-        var headers = ["timestamp", "load1", "load5", "load15", "11-RES", "22-RES", "33-RES"]
-        var showHeaders = ["11-RES", "22-RES", "33-RES"]
-
-        var c = splineChart('Process RES', 'Time', 'Memory Usage(K/M/G)')
-        var d = anychart.data.set(data)
-        for (var i = 0; i < showHeaders.length; i++) {
-            var index = findColumnIndex(headers, showHeaders[i])
-            spline(c, d, index, showHeaders[i])
-        }
-
-        spliceDraw(c, 'container')
-    })
-
-</script>
+<script src="js/data.js"></script>
+<script src="js/index.js"></script>
 </body>
-
 </html>
