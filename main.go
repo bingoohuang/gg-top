@@ -198,12 +198,28 @@ func ggHandle(h http.Handler) http.Handler {
 }
 
 func handleIndex(w http.ResponseWriter, r *http.Request) {
-	var replaced []byte
-	if *pInterval > 0 {
-		replaced = []byte(fmt.Sprintf(`<meta http-equiv="refresh" content="%d" >`, *pInterval/time.Second))
-	}
 	data, hash, contentType, _ := emb.Asset(serverRoot, "index.html", false)
-	data = bytes.Replace(data, []byte(`<meta http-equiv="refresh" content="600" >`), replaced, 1)
+
+	var refreshMeta []byte
+	if *pInterval > 0 {
+		refreshMeta = []byte(fmt.Sprintf(`<meta http-equiv="refresh" content="%d" >`, *pInterval/time.Second))
+	}
+	data = bytes.Replace(data, []byte(`<meta http-equiv="refresh" content="600" >`), refreshMeta, 1)
+
+	var header []byte
+	if pFileExists {
+		header, _ = readDataFileHeader(*pFile)
+	} else {
+		header = dataFileHeader()
+	}
+	data = bytes.Replace(data, []byte(`gg-fields:`), header, 1)
+
+	if f := r.URL.Query().Get("f"); f != "" {
+		if ff := ss.Split(f); len(ff) > 0 {
+			rr := fmt.Sprintf(`const tagSuffix = %s`, codec.Json(ff))
+			data = bytes.Replace(data, []byte(`const tagSuffix = ["RES", "MEM"]`), []byte(rr), 1)
+		}
+	}
 
 	httpp.NoCacheHeaders(w, r)
 	w.Header().Set("Content-Type", contentType)
@@ -258,6 +274,11 @@ var (
 	fileLock   sync.Mutex
 )
 
+func dataFileHeader() []byte {
+	defer handy.LockUnlock(&fileLock)()
+	return codec.Json(lastFields)
+}
+
 func dataFileExists() bool {
 	defer handy.LockUnlock(&fileLock)()
 
@@ -274,6 +295,17 @@ func createData() []byte {
 	}
 
 	return data
+}
+
+func readDataFileHeader(filename string) ([]byte, error) {
+	data, err := ioutil.ReadFile(filename)
+	if err != nil {
+		return nil, err
+	}
+
+	p := bytes.IndexRune(data, '\n')
+
+	return data[:p], nil
 }
 
 func readDataFile(filename string) ([]byte, error) {

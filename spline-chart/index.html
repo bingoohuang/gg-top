@@ -3,7 +3,7 @@
 
 <head>
     <meta charset="UTF-8">
-    <meta http-equiv="refresh" content="600" >
+    <meta http-equiv="refresh" content="600">
     <meta content="IE=edge" http-equiv="X-UA-Compatible">
     <meta content="width=device-width, initial-scale=1" name="viewport">
     <title>Spline Chart</title>
@@ -24,15 +24,24 @@
             margin: 0;
             padding: 0;
         }
+
+        .tip {
+            font-size: 9px;
+            color: lightgray;
+        }
     </style>
 </head>
 
 <body>
 <div id="container"></div>
+<div class="tip">fields: gg-fields:</div>
 <script src="js/anychart-base.min.js"></script>
 <script src="js/anychart-ui.min.js"></script>
 <script src="js/anychart-exports.min.js"></script>
 <script src="js/data.js"></script>
+<script type="text/javascript">
+    const tagSuffix = ["RES", "MEM"]
+</script>
 <script src="js/index.js"></script>
 </body>
 </html>

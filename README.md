@@ -10,6 +10,7 @@ features:
 3. to view data directly by gg-top provided service, like `gg-top -file gg-top-20211103170500.json`, then
    open http://127.0.0.1:1100 to view the data.
 4. to run at background: `gg-top -init`, `./ctl start -pids java,other -interval 5m`
+5. specified y-axis's fields: `http://127.0.0.1:1100/?f=load1,load5`
 
 ![img.png](_img/img.png)
 

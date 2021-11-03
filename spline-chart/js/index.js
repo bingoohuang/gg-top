@@ -32,15 +32,24 @@ function findColumnIndex(columns, column) {
     return -1
 }
 
+function isTagHeader(header) {
+    for (let j = 0; j < tagSuffix.length; j++) {
+        if (header.toUpperCase().indexOf(tagSuffix[j].toUpperCase()) >= 0) {
+            return true
+        }
+    }
+    return false
+}
+
 function drawChart() {
     let showHeaders = [];
     for (let i = 0; i < headers.length; i++) {
-        if (headers[i].endsWith("-MEM") || headers[i].endsWith("-RES")) {
+        if (isTagHeader(headers[i])) {
             showHeaders.push(headers[i])
         }
     }
 
-    const c = splineChart('Process RES', 'Time', 'Memory Usage(K/M/G)');
+    const c = splineChart('Process TOP', 'Time', 'Usage');
     const d = anychart.data.set(data);
     for (let i = 0; i < showHeaders.length; i++) {
         const index = findColumnIndex(headers, showHeaders[i]);
