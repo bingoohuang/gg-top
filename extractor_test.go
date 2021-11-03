@@ -35,11 +35,11 @@ KiB Swap:  8257532 total,  8245244 free,    12288 used.  4357044 avail Mem
 		"28418-VIRT", "28418-RES", "28418-SHR",
 		"28418-%CPU", "28418-%MEM", "28418-TIME+", "28418-COMMAND",
 	}, fields)
-	assert.Equal(t, "['2021-11-01T12:48',"+
+	assert.Equal(t, "[\"2021-11-01T12:48\","+
 		"0.40, 0.22, 0.22,"+
 		"8009040,599628,3094756,4314656,"+
-		"23134,5276184,1.1,17672,0.0,14.0,'101:24.10','java',"+
-		"28418,4304336,1.0,128396,0.0,13.1,'21:51.44','java']",
+		"23134,5276184,1.1,17672,0.0,14.0,\"101:24.10\",\"java\","+
+		"28418,4304336,1.0,128396,0.0,13.1,\"21:51.44\",\"java\"]",
 		result)
 
 	mac := `# top -l 1 -F -pid 99921 -pid 69330
@@ -64,5 +64,5 @@ PID    COMMAND          %CPU TIME     #TH #WQ #PORTS MEM  PURG  CMPRS PGRP  PPID
 		{Start: "PID ", Type: ExtractTable, Includes: []string{"COMMAND", "MEM", "%CPU"}, SortBy: "PID"},
 	})
 	assert.Equal(t, []string{"timestamp", "load1", "load5", "load15", "total", "resident", "private", "shared", "69330-COMMAND", "69330-%CPU", "69330-MEM", "99921-COMMAND", "99921-%CPU", "99921-MEM"}, fields)
-	assert.Equal(t, "['2021-11-01T12:48',2.61, 3.03, 3.25,249570,4457,0,2568,'WeChat',0.0,288,'Google Chrome He',0.0,110]", result)
+	assert.Equal(t, "[\"2021-11-01T12:48\",2.61, 3.03, 3.25,249570,4457,0,2568,\"WeChat\",0.0,288,\"Google Chrome He\",0.0,110]", result)
 }

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"embed"
+	"errors"
 	"fmt"
 	"io/fs"
 	"io/ioutil"
@@ -19,6 +20,8 @@ import (
 	"time"
 	"unicode"
 
+	"github.com/bingoohuang/gg/pkg/emb"
+
 	"github.com/bingoohuang/gg/pkg/filex"
 	"github.com/bingoohuang/gg/pkg/handy"
 	"github.com/bingoohuang/gg/pkg/httpp"
@@ -31,39 +34,87 @@ import (
 	"github.com/bingoohuang/gg/pkg/sigx"
 )
 
-//go:embed spline-chart
-var splitChart embed.FS
+var (
+	//go:embed spline-chart
+	splitChart embed.FS
+	serverRoot fs.FS
+)
 
 var (
 	pInterval = fla9.Duration("interval", 1*time.Minute, "collect interval, eg. 5m")
 	pInit     = fla9.Bool("init", false, "create initial ctl")
-	pFile     = fla9.String("file", "", "data file")
+	pFile     = fla9.String("file", "", "data file, with :generate to create a zip html file and exit")
 	pVersion  = fla9.Bool("version", false, "show version and exit")
 	pPids     = fla9.String("pids", "", "pids, like 10,12")
+
+	pFileExists   bool
+	pFileGenerate bool
 )
 
-func pFileExists() bool {
-	if *pFile == "" {
-		return false
-	}
+func init() {
+	var err error
 
-	f := strings.TrimSuffix(filepath.Base(*pFile), filepath.Ext(*pFile))
-	return filex.Exists(f+".json") && filex.Exists(f+".data")
-}
-
-func main() {
-	fla9.Parse()
-	ctl.Config{Initing: *pInit, PrintVersion: *pVersion}.ProcessInit()
-	ctx, _ := sigx.RegisterSignals(context.Background())
-
-	if !pFileExists() {
-		go collect(ctx, *pInterval, ss.Split(*pPids, ss.WithSeps(",")))
-	}
-
-	serverRoot, err := fs.Sub(splitChart, "spline-chart")
+	serverRoot, err = fs.Sub(splitChart, "spline-chart")
 	if err != nil {
 		log.Fatal(err)
 	}
+
+	fla9.Parse()
+	ctl.Config{Initing: *pInit, PrintVersion: *pVersion}.ProcessInit()
+
+	if *pFile != "" {
+		if pFileGenerate = strings.HasSuffix(*pFile, ":generate"); pFileGenerate {
+			*pFile = strings.TrimSuffix(*pFile, ":generate")
+		}
+	}
+
+	pFileExists = *pFile != "" && filex.Exists(*pFile)
+
+	if pFileExists {
+		*pInterval = 0
+	}
+}
+
+type tgzFilter struct{}
+
+func (t tgzFilter) Support(name string) bool {
+	return name == "js/data.js" || name == "index.html"
+}
+
+func (t tgzFilter) Filter(name string, data []byte) ([]byte, error) {
+	switch name {
+	case "js/data.js":
+		return readDataFile(*pFile)
+	case "index.html":
+		return bytes.Replace(data, []byte(`<meta http-equiv="refresh" content="600" >`), nil, 1), nil
+	default:
+		return data, nil
+	}
+}
+
+func generateReportTarGz() {
+	f := *pFile
+	f = strings.TrimSuffix(filepath.Base(f), filepath.Ext(f)) + ".tgz"
+
+	if err := tgzCreate(serverRoot, f, &tgzFilter{}); err != nil {
+		log.Fatalf("failed to create tgz %s, error: %v", f, err)
+	}
+
+	log.Printf("%s create successfully", f)
+}
+
+func main() {
+	if pFileGenerate {
+		generateReportTarGz()
+		return
+	}
+
+	ctx, _ := sigx.RegisterSignals(context.Background())
+
+	if !pFileExists {
+		go collectLoop(ctx, *pInterval, ss.Split(*pPids, ss.WithSeps(",")))
+	}
+
 	handler := http.FileServer(http.FS(serverRoot))
 
 	mux := http.NewServeMux()
@@ -71,7 +122,7 @@ func main() {
 
 	go func() {
 		mux.Handle("/", ggHandle(handler))
-		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			log.Printf("listen error: %v", err)
 		}
 	}()
@@ -85,32 +136,57 @@ func main() {
 }
 
 func ggHandle(h http.Handler) http.Handler {
+	defaultHandle := h.ServeHTTP
+
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodGet && r.URL.Path == "/js/data.js" {
-			w.Header().Set("Content-Type", "text/javascript; charset=utf-8")
-			httpp.NoCacheHeaders(w, r)
-
-			if dataFileExists() {
-				w.Write(createData())
-				return
-			}
-
-			if pFileExists() {
-				data, err := readDataFile(*pFile)
-				if err == nil {
-					w.Write(data)
-					return
-				}
-
-				log.Printf("failed to read file %s, error: %v", *pFile, err)
-			}
+		switch r.URL.Path {
+		case "/js/data.js":
+			handlerData(w, r, defaultHandle)
+		case "/", "/index.html":
+			handleIndex(w, r)
+		default:
+			defaultHandle(w, r)
 		}
-
-		h.ServeHTTP(w, r)
 	})
 }
 
-func collect(ctx context.Context, interval time.Duration, pids []string) {
+func handleIndex(w http.ResponseWriter, r *http.Request) {
+	var replaced []byte
+	if *pInterval > 0 {
+		replaced = []byte(fmt.Sprintf(`<meta http-equiv="refresh" content="%d" >`, *pInterval/time.Second))
+	}
+	data, hash, contentType, _ := emb.Asset(serverRoot, "index.html", false)
+	data = bytes.Replace(data, []byte(`<meta http-equiv="refresh" content="600" >`), replaced, 1)
+
+	httpp.NoCacheHeaders(w, r)
+	w.Header().Set("Content-Type", contentType)
+	w.Header().Add("ETag", hash)
+	_, _ = w.Write(data)
+}
+
+func handlerData(w http.ResponseWriter, r *http.Request, defaultHandle func(http.ResponseWriter, *http.Request)) {
+	w.Header().Set("Content-Type", "text/javascript; charset=utf-8")
+	httpp.NoCacheHeaders(w, r)
+
+	if dataFileExists() {
+		_, _ = w.Write(createData())
+		return
+	}
+
+	if pFileExists {
+		data, err := readDataFile(*pFile)
+		if err == nil {
+			_, _ = w.Write(data)
+			return
+		}
+
+		log.Printf("failed to read file %s, error: %v", *pFile, err)
+	}
+
+	defaultHandle(w, r)
+}
+
+func collectLoop(ctx context.Context, interval time.Duration, pids []string) {
 	if interval == 0 {
 		return
 	}
@@ -118,12 +194,11 @@ func collect(ctx context.Context, interval time.Duration, pids []string) {
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
-	doCollect(interval, pids)
-
 	for {
+		collect(interval, pids)
+
 		select {
 		case <-ticker.C:
-			doCollect(interval, pids)
 		case <-ctx.Done():
 			return
 		}
@@ -145,40 +220,34 @@ func dataFileExists() bool {
 func createData() []byte {
 	defer handy.LockUnlock(&fileLock)()
 
-	var b bytes.Buffer
-	b.WriteString(`const headers = `)
-	b.Write(codec.Json(lastFields))
-	b.WriteString("\nconst data = [")
-	data, _ := ioutil.ReadFile(file)
-	b.Write(bytes.TrimRight(data, "\n,"))
-	b.WriteString("]\n")
+	data, err := readDataFile(file)
+	if err != nil {
+		log.Printf("W! failed to read data file %s, error: %v", file, err)
+		return nil
+	}
 
-	return b.Bytes()
+	return data
 }
 
 func readDataFile(filename string) ([]byte, error) {
-	f := strings.TrimSuffix(filepath.Base(filename), filepath.Ext(filename))
+	data, err := ioutil.ReadFile(filename)
+	if err != nil {
+		return nil, err
+	}
 
-	header, err := ioutil.ReadFile(f + ".json")
-	if err != nil {
-		return nil, err
-	}
-	data, err := ioutil.ReadFile(f + ".data")
-	if err != nil {
-		return nil, err
-	}
+	p := bytes.IndexRune(data, '\n')
 
 	var b bytes.Buffer
 	b.WriteString(`const headers = `)
-	b.Write(header)
+	b.Write(data[:p])
 	b.WriteString("\nconst data = [")
-	b.Write(bytes.TrimRight(data, "\n,"))
+	b.Write(data[p : len(data)-2])
 	b.WriteString("]\n")
 
 	return b.Bytes(), nil
 }
 
-func doCollect(interval time.Duration, pids []string) {
+func collect(interval time.Duration, pids []string) {
 	if len(pids) == 0 {
 		pids = []string{strconv.Itoa(os.Getpid())}
 	}
@@ -197,10 +266,10 @@ func doCollect(interval time.Duration, pids []string) {
 		fmt.Printf("%s\n", codec.Json(fields))
 		lastFields = fields
 		tt := ss.Strip(t, func(r rune) bool { return !unicode.IsDigit(r) })
-		file = "gg-top-" + tt + ".data"
-		ioutil.WriteFile("gg-top-"+tt+".json", codec.Json(fields), os.ModePerm)
+		file = "gg-top-" + tt + ".json"
+		_, _ = filex.Append(file, append(codec.Json(fields), '\n'))
 	}
 
-	filex.Append(file, []byte(result+",\n"))
+	_, _ = filex.Append(file, []byte(result+",\n"))
 	fmt.Printf("%s\n", result)
 }
