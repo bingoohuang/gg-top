@@ -6,7 +6,6 @@ import (
 	"embed"
 	"errors"
 	"fmt"
-	"github.com/bingoohuang/gg/pkg/netx/freeport"
 	"io/fs"
 	"io/ioutil"
 	"log"
@@ -15,11 +14,14 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 	"unicode"
+
+	"github.com/bingoohuang/gg/pkg/netx/freeport"
 
 	"github.com/bingoohuang/gg/pkg/emb"
 
@@ -46,7 +48,7 @@ var (
 	pInit     = fla9.Bool("init", false, "create initial ctl")
 	pFile     = fla9.String("file", "", "data file, with :generate to create a zip html file and exit")
 	pVersion  = fla9.Bool("version", false, "show version and exit")
-	pPids     = fla9.String("pids", "", "pids, like 10,12")
+	pPidWords = fla9.String("pids", "", "pids, like 10,12, or command line words")
 	pPort     = fla9.Int("port", 1100, "port")
 
 	pFileExists   bool
@@ -105,6 +107,18 @@ func generateReportTarGz() {
 	log.Printf("%s create successfully", f)
 }
 
+var numReq = regexp.MustCompile(`^\d+%`)
+
+func isAllNum(ss []string) bool {
+	for _, s := range ss {
+		if !numReq.MatchString(s) {
+			return false
+		}
+	}
+
+	return len(ss) > 0
+}
+
 func main() {
 	if pFileGenerate {
 		generateReportTarGz()
@@ -114,7 +128,19 @@ func main() {
 	ctx, _ := sigx.RegisterSignals(context.Background())
 
 	if !pFileExists {
-		go collectLoop(ctx, *pInterval, ss.Split(*pPids, ss.WithSeps(",")))
+		pidWords := ss.Split(*pPidWords, ss.WithSeps(","))
+		var pids func() []string
+		if isAllNum(pidWords) {
+			pids = func() []string { return pidWords }
+		} else {
+			grepWord := ""
+			for _, word := range pidWords {
+				grepWord += `|grep '\b` + word + `\b'`
+			}
+			s := `ps -ef|grep -v grep` + grepWord + `|awk '{print $2}'|xargs|sed 's/ /,/g'`
+			pids = func() []string { return collectPids(s) }
+		}
+		go collectLoop(ctx, *pInterval, pids)
 	}
 
 	handler := http.FileServer(http.FS(serverRoot))
@@ -143,6 +169,17 @@ func main() {
 			log.Printf("shutdown error: %v", err)
 		}
 	}
+}
+
+func collectPids(s string) []string {
+	log.Printf(`start to exec shell "%s"`, s)
+	out, err := exec.Command("sh", "-c", s).Output()
+	if err != nil {
+		log.Printf("exec %s failed, error:%v", s, err)
+		return nil
+	}
+
+	return ss.Split(string(out), ss.WithSeps(","))
 }
 
 func ggHandle(h http.Handler) http.Handler {
@@ -196,7 +233,7 @@ func handlerData(w http.ResponseWriter, r *http.Request, defaultHandle func(http
 	defaultHandle(w, r)
 }
 
-func collectLoop(ctx context.Context, interval time.Duration, pids []string) {
+func collectLoop(ctx context.Context, interval time.Duration, pids func() []string) {
 	if interval == 0 {
 		return
 	}
@@ -257,13 +294,19 @@ func readDataFile(filename string) ([]byte, error) {
 	return b.Bytes(), nil
 }
 
-func collect(interval time.Duration, pids []string) {
+func collect(interval time.Duration, pidsFn func() []string) {
+	pids := pidsFn()
 	if len(pids) == 0 {
 		pids = []string{strconv.Itoa(os.Getpid())}
 	}
-	out, err := exec.Command("sh", "-c", topCmd(pids)).Output()
+
+	log.Printf("start to collect top information for pids %s", strings.Join(pids, ","))
+
+	top := topCmd(pids)
+	log.Printf(`start to exec shell "%s"`, top)
+	out, err := exec.Command("sh", "-c", top).Output()
 	if err != nil {
-		log.Printf("exec failed, error:%v", err)
+		log.Printf("exec %s failed, error:%v", top, err)
 		return
 	}
 
@@ -273,7 +316,7 @@ func collect(interval time.Duration, pids []string) {
 	defer handy.LockUnlock(&fileLock)()
 
 	if !reflect.DeepEqual(lastFields, fields) {
-		fmt.Printf("%s\n", codec.Json(fields))
+		log.Printf("%s\n", codec.Json(fields))
 		lastFields = fields
 		tt := ss.Strip(t, func(r rune) bool { return !unicode.IsDigit(r) })
 		file = "gg-top-" + tt + ".json"
@@ -281,5 +324,5 @@ func collect(interval time.Duration, pids []string) {
 	}
 
 	_, _ = filex.Append(file, []byte(result+",\n"))
-	fmt.Printf("%s\n", result)
+	log.Printf("%s\n", result)
 }
