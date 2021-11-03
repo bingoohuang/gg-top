@@ -48,7 +48,7 @@ var (
 	pInit     = fla9.Bool("init", false, "create initial ctl")
 	pFile     = fla9.String("file", "", "data file, with :generate to create a zip html file and exit")
 	pVersion  = fla9.Bool("version", false, "show version and exit")
-	pPidWords = fla9.String("pids", "", "pids, like 10,12, or command line words")
+	pPidWords = fla9.String("p", "", "pids, like 10,12, or command line words")
 	pPort     = fla9.Int("port", 1100, "port")
 
 	pFileExists   bool
@@ -130,7 +130,9 @@ func main() {
 	if !pFileExists {
 		pidWords := ss.Split(*pPidWords, ss.WithSeps(","))
 		var pids func() []string
-		if isAllNum(pidWords) {
+		if len(pidWords) == 0 {
+			pids = func() []string { return nil }
+		} else if isAllNum(pidWords) {
 			pids = func() []string { return pidWords }
 		} else {
 			grepWord := ""
