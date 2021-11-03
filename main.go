@@ -265,6 +265,7 @@ func collectLoop(ctx context.Context, interval time.Duration, pids func() []stri
 		return
 	}
 
+	time.Sleep(3 * time.Second) // wait some shell to exit
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
