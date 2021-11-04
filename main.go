@@ -21,6 +21,8 @@ import (
 	"time"
 	"unicode"
 
+	"github.com/bingoohuang/jj"
+
 	"github.com/bingoohuang/gg/pkg/netx/freeport"
 
 	"github.com/bingoohuang/gg/pkg/emb"
@@ -315,9 +317,8 @@ func readDataFileHeader(filename string) ([]byte, error) {
 		return nil, err
 	}
 
-	p := bytes.IndexRune(data, '\n')
-
-	return data[:p], nil
+	r := jj.GetBytes(data, "headers")
+	return []byte(r.Raw), nil
 }
 
 func readDataFile(filename string) ([]byte, error) {
