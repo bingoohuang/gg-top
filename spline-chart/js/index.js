@@ -43,16 +43,16 @@ function isTagHeader(header) {
 
 function drawChart() {
     let showHeaders = [];
-    for (let i = 0; i < headers.length; i++) {
-        if (isTagHeader(headers[i])) {
-            showHeaders.push(headers[i])
+    for (let i = 0; i < data.headers.length; i++) {
+        if (isTagHeader(data.headers[i])) {
+            showHeaders.push(data.headers[i])
         }
     }
 
     const c = splineChart('Process TOP', 'Time', 'Usage');
-    const d = anychart.data.set(data);
+    const d = anychart.data.set(data.data);
     for (let i = 0; i < showHeaders.length; i++) {
-        const index = findColumnIndex(headers, showHeaders[i]);
+        const index = findColumnIndex(data.headers, showHeaders[i]);
         spline(c, d, index, showHeaders[i])
     }
 

@@ -326,14 +326,9 @@ func readDataFile(filename string) ([]byte, error) {
 		return nil, err
 	}
 
-	p1 := bytes.Index(data, []byte(`{"headers":`))
-	p2 := bytes.Index(data, []byte(`,"data":[`))
-
 	var b bytes.Buffer
-	b.WriteString(`const headers = `)
-	b.Write(data[p1+11 : p2])
-	b.WriteString("\nconst data = [")
-	b.Write(data[p2+9 : len(data)-1])
+	b.WriteString(`const data = `)
+	b.Write(data)
 
 	return b.Bytes(), nil
 }
