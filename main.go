@@ -185,6 +185,7 @@ func main() {
 }
 
 // open opens the specified URL in the default browser of the user.
+// from https://stackoverflow.com/questions/39320371/how-start-web-server-to-open-page-in-browser-in-golang.
 func open(url string) error {
 	var cmd string
 	var args []string
