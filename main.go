@@ -140,7 +140,7 @@ func main() {
 			thisPid := strconv.Itoa(os.Getpid())
 			grepWord := ""
 			for _, word := range pidWords {
-				grepWord += `|grep '\b` + word + `\b'`
+				grepWord += `|grep -w ` + word
 			}
 			s := `ps -ef|grep -v grep` + grepWord + `|awk '{print $2}'|xargs|sed 's/ /,/g'`
 			pids = func() []string { return collectPids(s, thisPid) }
