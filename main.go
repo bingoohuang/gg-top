@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/bingoohuang/gg/pkg/mapp"
 	"io/fs"
 	"io/ioutil"
 	"log"
@@ -17,12 +16,15 @@ import (
 	"path/filepath"
 	"reflect"
 	"regexp"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 	"unicode"
+
+	"github.com/bingoohuang/gg/pkg/mapp"
 
 	"github.com/bingoohuang/jj"
 
@@ -168,6 +170,8 @@ func main() {
 				log.Printf("listen error: %v", err)
 			}
 		}()
+
+		go open("http://127.0.0.1" + addr)
 	}
 
 	<-ctx.Done()
@@ -178,6 +182,24 @@ func main() {
 			log.Printf("shutdown error: %v", err)
 		}
 	}
+}
+
+// open opens the specified URL in the default browser of the user.
+func open(url string) error {
+	var cmd string
+	var args []string
+
+	switch runtime.GOOS {
+	case "windows":
+		cmd = "cmd"
+		args = []string{"/c", "start"}
+	case "darwin":
+		cmd = "open"
+	default: // "linux", "freebsd", "openbsd", "netbsd"
+		cmd = "xdg-open"
+	}
+	args = append(args, url)
+	return exec.Command(cmd, args...).Start()
 }
 
 func collectPids(s, excludePid string) []string {
