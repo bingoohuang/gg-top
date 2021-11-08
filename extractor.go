@@ -67,15 +67,11 @@ func (c ExtractConfig) capture(s string) (string, bool) {
 	}), true
 }
 
-var (
-	reNum      = regexp.MustCompile(`\b[\d.]+`)
-	reSizeNum  = regexp.MustCompile(`(?i)^([\d.]+)([mg]?)$`)
-	reValueKey = regexp.MustCompile(`(\w+)\s+(\w+)`)
-)
+var reValueKey = regexp.MustCompile(`(\w+)\s+(\w+)`)
 
 // ExtractTop extracts top output.
-func ExtractTop(timestamp, s string) (fields []string, result string) {
-	return ExtractTopWithConfig(timestamp, s, extractConfig)
+func ExtractTop(timestamp, s string, convertUnit bool) (fields []string, result string) {
+	return ExtractTopWithConfig(timestamp, s, extractConfig, convertUnit)
 }
 
 var linuxExtractConfig = []ExtractConfig{
@@ -91,7 +87,7 @@ var darwinExtractConfig = []ExtractConfig{
 }
 
 // ExtractTopWithConfig extracts top output.
-func ExtractTopWithConfig(timestamp, s string, configs []ExtractConfig) (fields []string, result string) {
+func ExtractTopWithConfig(timestamp, s string, configs []ExtractConfig, convertUnit bool) (fields []string, result string) {
 	fields = []string{"timestamp"}
 	result = `["` + timestamp + `"`
 	for _, c := range configs {
@@ -110,7 +106,7 @@ func ExtractTopWithConfig(timestamp, s string, configs []ExtractConfig) (fields 
 			}
 
 			for _, item := range reValueKey.FindAllStringSubmatch(t, -1) {
-				result += "," + wrap(item[1])
+				result += "," + wrap(item[1], convertUnit)
 				if len(c.Names) == 0 {
 					fields = append(fields, item[2])
 				}
@@ -123,14 +119,14 @@ func ExtractTopWithConfig(timestamp, s string, configs []ExtractConfig) (fields 
 				continue
 			}
 
-			result, fields = c.extractTable(t, result, fields)
+			result, fields = c.extractTable(t, result, fields, convertUnit)
 		}
 	}
 
 	return fields, result + "]"
 }
 
-func (c ExtractConfig) extractTable(t, result string, fields []string) (string, []string) {
+func (c ExtractConfig) extractTable(t, result string, fields []string, convertUnit bool) (string, []string) {
 	p := strings.Index(t, "\n")
 	header := t[:p]
 	t = t[p+1:]
@@ -178,7 +174,7 @@ func (c ExtractConfig) extractTable(t, result string, fields []string) (string, 
 		fp := fs[headerMap[sortBy]] + "-"
 		for i, f := range fs {
 			if includeFunc(headerColumns[i]) {
-				result += "," + wrap(f)
+				result += "," + wrap(f, convertUnit)
 			}
 		}
 
@@ -246,12 +242,16 @@ func createHeaderIndices(headerColumns []string, header string) headerIndices {
 	}
 }
 
-func wrap(s string) string {
-	subs := reSizeNum.FindAllStringSubmatch(s, -1)
-	if len(subs) > 0 {
+var (
+	reSizeNum = regexp.MustCompile(`(?i)^([\d.]+)([mg]?)$`)
+	reNum     = regexp.MustCompile(`\b[\d.]+`)
+)
+
+func wrap(s string, convertUnit bool) string {
+	if subs := reSizeNum.FindAllStringSubmatch(s, -1); len(subs) > 0 {
 		numPart := subs[0][1]
 		unitPart := subs[0][2]
-		if unitPart == "" {
+		if unitPart == "" || !convertUnit {
 			return numPart
 		}
 

@@ -49,6 +49,7 @@ var (
 var (
 	pInterval = fla9.Duration("interval", 1*time.Minute, "collect interval, eg. 5m")
 	pInit     = fla9.Bool("init", false, "create initial ctl")
+	pConvert  = fla9.Bool("convert", false, "Convert G/M to K or just drop if")
 	pFile     = fla9.String("file", "", "data file, with :generate to create a zip html file and exit")
 	pVersion  = fla9.Bool("version", false, "show version and exit")
 	pPidWords = fla9.String("p", "", "pids, like 10,12, or command line words")
@@ -354,7 +355,7 @@ func collect(interval time.Duration, pidsFn func() []string) {
 	}
 
 	t := time.Now().Truncate(interval).Format(`2006-01-02T15:04:05`)
-	fields, result := ExtractTop(t, string(out))
+	fields, result := ExtractTop(t, string(out), *pConvert)
 
 	defer handy.LockUnlock(&fileLock)()
 	var data bytes.Buffer
