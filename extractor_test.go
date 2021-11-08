@@ -24,7 +24,7 @@ KiB Swap:  8257532 total,  8245244 free,    12288 used.  4357044 avail Mem
 		{Start: "PID ", Type: ExtractTable, Excludes: []string{"PR", "NI", "S", "USER"}, SortBy: "PID"},
 	}
 
-	fields, result := ExtractTopWithConfig("2021-11-01T12:48", s, configs)
+	fields, result := ExtractTopWithConfig("2021-11-01T12:48", s, configs, true)
 	assert.Equal(t, []string{
 		"timestamp", "load1", "load5", "load15",
 		"memTotal", "memFree", "memUsed", "memBuff",
@@ -62,12 +62,14 @@ PID    COMMAND          %CPU TIME     #TH #WQ #PORTS MEM  PURG  CMPRS PGRP  PPID
 		{Start: "Load Avg:", End: "\n", Type: ExtractWhole, Names: []string{"load1", "load5", "load15"}},
 		{Start: "MemRegions", End: "\n", Type: ExtractValueKey},
 		{Start: "PID ", Type: ExtractTable, Includes: []string{"COMMAND", "MEM", "%CPU"}, SortBy: "PID"},
-	})
+	}, true)
 	assert.Equal(t, []string{"timestamp", "load1", "load5", "load15", "total", "resident", "private", "shared", "69330-COMMAND", "69330-%CPU", "69330-MEM", "99921-COMMAND", "99921-%CPU", "99921-MEM"}, fields)
 	assert.Equal(t, "[\"2021-11-01T12:48\",2.61, 3.03, 3.25,249570,4563968,0,2629632,\"WeChat\",0.0,294912,\"Google Chrome He\",0.0,112640]", result)
 }
 
 func TestWrap(t *testing.T) {
-	assert.Equal(t, "1048576", wrap("1.0g"))
-	assert.Equal(t, "1153433.6", wrap("1.1g"))
+	assert.Equal(t, "1048576", wrap("1.0g", true))
+	assert.Equal(t, "1153433.6", wrap("1.1g", true))
+	assert.Equal(t, "1.0", wrap("1.0g", false))
+	assert.Equal(t, "1.1", wrap("1.1g", false))
 }
