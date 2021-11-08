@@ -15,6 +15,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -338,6 +339,8 @@ func collect(interval time.Duration, pidsFn func() []string) {
 	pids := pidsFn()
 	if len(pids) == 0 {
 		pids = []string{strconv.Itoa(os.Getpid())}
+	} else {
+		pids = atLeastTwoTimes(pids)
 	}
 
 	log.Printf("start to collect top information for pids %s", strings.Join(pids, ","))
@@ -378,4 +381,82 @@ func collect(interval time.Duration, pidsFn func() []string) {
 
 	_, _ = filex.Append(file, data.Bytes(), filex.WithBackOffset(backOffset))
 	log.Printf("%s\n", result)
+}
+
+var (
+	old     []string
+	newPids []string
+	times   int
+)
+
+func atLeastTwoTimes(pids []string) []string {
+	sort.Strings(pids)
+	if len(old) == 0 {
+		old = pids
+		return pids
+	}
+
+	if reflect.DeepEqual(old, pids) {
+		newPids = nil
+		times = 0
+		return pids
+	}
+
+	if !containsSlice(pids, old) {
+		old = pids
+		newPids = nil
+		times = 0
+		return pids
+	}
+
+	if len(newPids) == 0 {
+		newPids = pids
+		times = 1
+		return old
+	}
+
+	if reflect.DeepEqual(newPids, pids) {
+		times++
+	} else {
+		newPids = pids
+		times = 1
+		return old
+	}
+
+	if times >= 2 {
+		old = pids
+		newPids = nil
+		times = 0
+		return pids
+	}
+
+	return old
+}
+
+func containsItem(s []string, e string) bool {
+	for _, a := range s {
+		if a == e {
+			return true
+		}
+	}
+	return false
+}
+
+// containsSlice tells if slice s contains all elements of s2.
+func containsSlice(s1, s2 []string) bool {
+	if len(s1) < len(s2) {
+		return false
+	}
+
+	if len(s1) == 0 {
+		return len(s2) == 0
+	}
+
+	for _, e := range s2 {
+		if !containsItem(s1, e) {
+			return false
+		}
+	}
+
+	return true
 }
