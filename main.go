@@ -4,8 +4,10 @@ import (
 	"bytes"
 	"context"
 	"embed"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/bingoohuang/gg/pkg/mapp"
 	"io/fs"
 	"io/ioutil"
 	"log"
@@ -221,13 +223,16 @@ func handleIndex(w http.ResponseWriter, r *http.Request) {
 	}
 	data = bytes.Replace(data, []byte(`<meta http-equiv="refresh" content="600">`), refreshMeta, 1)
 
-	var header []byte
+	var header, lsofs []byte
 	if pFileExists {
-		header, _ = readDataFileHeader(*pFile)
+		header, lsofs, _ = readDataFileHeader(*pFile)
 	} else {
-		header = dataFileHeader()
+		header, lsofs = dataFileHeader()
 	}
+
 	data = bytes.Replace(data, []byte(`gg-fields:`), header, 1)
+	lsofList := mergeLsofs(lsofs)
+	data = bytes.Replace(data, []byte(`lsofs:`), []byte(lsofList), 1)
 
 	if f := r.URL.Query().Get("f"); f != "" {
 		if ff := ss.Split(f); len(ff) > 0 {
@@ -240,6 +245,18 @@ func handleIndex(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", contentType)
 	w.Header().Add("ETag", hash)
 	_, _ = w.Write(data)
+}
+
+func mergeLsofs(lsofs []byte) string {
+	var lsofList string
+	var lsofMap map[string]string
+	_ = json.Unmarshal(lsofs, &lsofMap)
+
+	for _, k := range mapp.KeysSorted(lsofMap) {
+		lsofList += lsofMap[k] + "\n"
+	}
+
+	return lsofList
 }
 
 func handlerData(w http.ResponseWriter, r *http.Request, defaultHandle func(http.ResponseWriter, *http.Request)) {
@@ -286,13 +303,14 @@ func collectLoop(ctx context.Context, interval time.Duration, pids func() []stri
 
 var (
 	lastFields []string
+	lastLsofs  []byte
 	file       string
 	fileLock   sync.Mutex
 )
 
-func dataFileHeader() []byte {
+func dataFileHeader() ([]byte, []byte) {
 	defer handy.LockUnlock(&fileLock)()
-	return codec.Json(lastFields)
+	return codec.Json(lastFields), lastLsofs
 }
 
 func dataFileExists() bool {
@@ -313,14 +331,15 @@ func createData() []byte {
 	return data
 }
 
-func readDataFileHeader(filename string) ([]byte, error) {
+func readDataFileHeader(filename string) ([]byte, []byte, error) {
 	data, err := ioutil.ReadFile(filename)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	r := jj.GetBytes(data, "headers")
-	return []byte(r.Raw), nil
+	r1 := jj.GetBytes(data, "headers")
+	r2 := jj.GetBytes(data, "lsof")
+	return []byte(r1.Raw), []byte(r2.Raw), nil
 }
 
 func readDataFile(filename string) ([]byte, error) {
@@ -367,6 +386,9 @@ func collect(interval time.Duration, pidsFn func() []string) {
 		file = "gg-top-" + tt + ".json"
 		data.Write([]byte(`{"headers":`))
 		data.Write(codec.Json(fields))
+		data.Write([]byte(",\"lsof\":"))
+		lastLsofs = codec.Json(lsof(pids))
+		data.Write(lastLsofs)
 		data.Write([]byte(",\"data\":[\n"))
 		_, _ = filex.Append(file, data.Bytes())
 	} else {
@@ -382,6 +404,22 @@ func collect(interval time.Duration, pidsFn func() []string) {
 
 	_, _ = filex.Append(file, data.Bytes(), filex.WithBackOffset(backOffset))
 	log.Printf("%s\n", result)
+}
+
+func lsof(pids []string) map[string]string {
+	m := make(map[string]string)
+	for _, pid := range pids {
+		lsofCmd := `lsof -p ` + pid
+		log.Printf(`start to exec shell "%s"`, lsofCmd)
+		out, err := exec.Command("sh", "-c", lsofCmd).Output()
+		if err != nil {
+			log.Printf("exec %s failed, error:%v", lsofCmd, err)
+			continue
+		}
+		m[pid] = string(out)
+	}
+
+	return m
 }
 
 var (

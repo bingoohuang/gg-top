@@ -2,7 +2,7 @@
 all: default test install
 
 app=$(notdir $(shell pwd))
-appVersion := 1.1.0
+appVersion := 1.2.0
 goVersion := $(shell go version | sed 's/go version //'|sed 's/ /_/')
 # e.g. 2021-10-28T11:49:52+0800
 buildTime := $(shell date +%FT%T%z)
