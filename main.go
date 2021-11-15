@@ -54,8 +54,8 @@ var (
 	pInterval = fla9.Duration("interval", 1*time.Minute, "collect interval, eg. 5m")
 	pInit     = fla9.Bool("init", false, "create initial ctl")
 	pConvert  = fla9.Bool("convert", false, "Convert G/M to K or just drop if")
-	pFile     = fla9.String("file", "", "data file, with :generate to create a zip html file and exit")
-	pVersion  = fla9.Bool("version", false, "show version and exit")
+	pFile     = fla9.String("file,f", "", "data file, with :generate to create a zip html file and exit")
+	pVersion  = fla9.Bool("version,v", false, "show version and exit")
 	pPidWords = fla9.String("p", "", "pids, like 10,12, or command line words")
 	pPort     = fla9.Int("port", 1100, "port")
 
@@ -355,7 +355,7 @@ func createData() []byte {
 }
 
 func readDataFileHeader(filename string) ([]byte, []byte, error) {
-	data, err := ioutil.ReadFile(filename)
+	data, err := readFile(filename)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -366,7 +366,7 @@ func readDataFileHeader(filename string) ([]byte, []byte, error) {
 }
 
 func readDataFile(filename string) ([]byte, error) {
-	data, err := ioutil.ReadFile(filename)
+	data, err := readFile(filename)
 	if err != nil {
 		return nil, err
 	}
@@ -376,6 +376,21 @@ func readDataFile(filename string) ([]byte, error) {
 	b.Write(data)
 
 	return b.Bytes(), nil
+}
+
+func readFile(filename string) ([]byte, error) {
+	data, err := ioutil.ReadFile(filename)
+	if err != nil {
+		return nil, err
+	}
+
+	if strings.HasSuffix(filename, ".gz") {
+		data, err = Gzipd(data)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return data, nil
 }
 
 func collect(interval time.Duration, pidsFn func() []string) {
