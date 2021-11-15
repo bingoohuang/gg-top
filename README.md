@@ -7,8 +7,7 @@ features:
 1. collect process top information, like `gg-top -p java,other`, or `gg-top -p 19107,20030`
 2. generate a html tar.gz package based on the output file, like `gg-top -file gg-top-20211103170500.json:generate`,
    then download it, decompress it, click index.html to see the data in the browser.
-3. to view data directly by gg-top provided service, like `gg-top -file gg-top-20211103170500.json`, then
-   open http://127.0.0.1:1100 to view the data.
+3. to view data directly by gg-top provided service, like `gg-top -f gg-top.json`, `gg-top -f gg-top.json.gz`.
 4. to run at background: `gg-top -init`, `./ctl start -p java,other -interval 5m`
 5. specified y-axis's fields: `http://127.0.0.1:1100/?f=load1,load5`
 
