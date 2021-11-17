@@ -162,7 +162,9 @@ func main() {
 	if *pPort > 0 {
 		addr := fmt.Sprintf(":%d", freeport.PortStart(*pPort))
 		srv = &http.Server{Addr: addr, Handler: mux}
-		log.Printf("Start to listen on %s", addr)
+		urlAddr := "http://127.0.0.1" + addr
+
+		log.Printf("Start to listen on %s, you can visit %s", addr, urlAddr)
 
 		go func() {
 			mux.Handle("/", ggHandle(handler))
@@ -171,7 +173,7 @@ func main() {
 			}
 		}()
 
-		go open("http://127.0.0.1" + addr)
+		go open(urlAddr)
 	}
 
 	<-ctx.Done()
